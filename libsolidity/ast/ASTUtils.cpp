@@ -41,7 +41,7 @@ public:
 		return false;
 	}
 
-	explicit ASTNodeLocator(int _pos): m_pos{_pos}, m_closestMatch{nullptr} {};
+	explicit ASTNodeLocator(int _pos): m_pos{_pos}, m_closestMatch{nullptr} {}
 
 	int const m_pos;
 	ASTNode const* m_closestMatch;
