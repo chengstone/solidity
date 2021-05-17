@@ -67,7 +67,6 @@ public:
 		std::map<std::string, evmasm::LinkerObject::FunctionDebugData> const& _debugInfo
 	);
 
-private:
 	struct InputsAndSettings
 	{
 		std::string language;
@@ -89,6 +88,10 @@ private:
 		bool viaIR = false;
 	};
 
+	/// Configures @p _compilerStack according to the input settings in @p _inputsAndSettings.
+	static void configure(InputsAndSettings const& _inputsAndSettings, CompilerStack& _compilerStack);
+
+private:
 	/// Parses the input json (and potentially invokes the read callback) and either returns
 	/// it in condensed form or an error as a json object.
 	std::variant<InputsAndSettings, Json::Value> parseInput(Json::Value const& _input);
