@@ -150,7 +150,7 @@ ReadCallback::Result FileReader::readFile(string const& _kind, string const& _so
 			return ReadCallback::Result{false, "File outside of allowed directories."};
 
 		if (!boost::filesystem::is_regular_file(candidates[0]))
-			return ReadCallback::Result{false, "Not a valid file."};
+			return ReadCallback::Result{false, "Not a valid existing file: " + candidates[0].string()};
 
 		// NOTE: we ignore the FileNotFound exception as we manually check above
 		auto contents = readFileAsString(candidates[0]);
