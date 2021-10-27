@@ -22,6 +22,7 @@
 #include <libsolidity/interface/StandardCompiler.h>
 #include <libsolidity/lsp/LanguageServer.h>
 #include <libsolidity/lsp/ReferenceCollector.h>
+#include <libsolidity/lsp/SemanticTokensBuilder.h>
 
 #include <liblangutil/SourceReferenceExtractor.h>
 #include <liblangutil/CharStream.h>
@@ -95,6 +96,71 @@ vector<Declaration const*> allAnnotatedDeclarations(Identifier const* _identifie
 	return output;
 }
 
+template <typename A>
+void jsonArrayAppend(Json::Value& _array, A a)
+{
+	_array.append(a);
+}
+
+template <typename A, typename... B>
+void jsonArrayAppend(Json::Value& _array, A a, B... b)
+{
+	jsonArrayAppend(_array, a);
+	jsonArrayAppend(_array, b...);
+}
+
+template <typename... Args>
+Json::Value jsonArray(Args... _args)
+{
+	Json::Value array = Json::arrayValue;
+	if constexpr (sizeof...(_args) != 0)
+		jsonArrayAppend(array, std::forward<Args>(_args)...);
+	return array;
+}
+
+Json::Value semanticTokensLegend()
+{
+	Json::Value legend = Json::objectValue;
+
+	// NOTE! The (alphabetical) order and items must match exactly the items of
+	//       their respective enum class members.
+
+	Json::Value tokenTypes = Json::arrayValue;
+	tokenTypes.append("class");
+	tokenTypes.append("comment");
+	tokenTypes.append("enum");
+	tokenTypes.append("enumMember");
+	tokenTypes.append("event");
+	tokenTypes.append("function");
+	tokenTypes.append("interface");
+	tokenTypes.append("keyword");
+	tokenTypes.append("macro");
+	tokenTypes.append("method");
+	tokenTypes.append("modifier");
+	tokenTypes.append("number");
+	tokenTypes.append("operator");
+	tokenTypes.append("parameter");
+	tokenTypes.append("property");
+	tokenTypes.append("string");
+	tokenTypes.append("struct");
+	tokenTypes.append("type");
+	tokenTypes.append("typeParameter");
+	tokenTypes.append("variable");
+	legend["tokenTypes"] = tokenTypes;
+
+	Json::Value tokenModifiers = Json::arrayValue;
+	tokenModifiers.append("abstract");
+	tokenModifiers.append("declaration");
+	tokenModifiers.append("definition");
+	tokenModifiers.append("deprecated");
+	tokenModifiers.append("documentation");
+	tokenModifiers.append("modification");
+	tokenModifiers.append("readonly");
+	legend["tokenModifiers"] = tokenModifiers;
+
+	return legend;
+}
+
 }
 
 LanguageServer::LanguageServer(Logger _logger, unique_ptr<Transport> _transport):
@@ -113,6 +179,7 @@ LanguageServer::LanguageServer(Logger _logger, unique_ptr<Transport> _transport)
 		{"textDocument/hover", bind(&LanguageServer::handleTextDocumentHover, this, _1, _2)},
 		{"textDocument/implementation", [this](auto _id, auto _args) { handleGotoDefinition(_id, _args); }},
 		{"textDocument/references", bind(&LanguageServer::handleTextDocumentReferences, this, _1, _2)},
+		{"textDocument/semanticTokens/full", bind(&LanguageServer::semanticTokensFull, this, _1, _2)},
 		{"workspace/didChangeConfiguration", bind(&LanguageServer::handleWorkspaceDidChangeConfiguration, this, _1, _2)},
 	},
 	m_logger{move(_logger)}
@@ -434,6 +501,10 @@ void LanguageServer::handleInitialize(MessageID _id, Json::Value const& _args)
 	replyArgs["capabilities"]["implementationProvider"] = true;
 	replyArgs["capabilities"]["documentHighlightProvider"] = true;
 	replyArgs["capabilities"]["referencesProvider"] = true;
+	replyArgs["capabilities"]["semanticTokensProvider"]["legend"] = semanticTokensLegend();
+	replyArgs["capabilities"]["semanticTokensProvider"]["range"] = true;
+	replyArgs["capabilities"]["semanticTokensProvider"]["full"] = true; // XOR requests.full.delta = true
+
 	m_client->reply(_id, replyArgs);
 }
 
@@ -654,6 +725,25 @@ void LanguageServer::handleTextDocumentReferences(MessageID _id, Json::Value con
 		jsonReply.append(toJson(location));
 	log("Sending reply");
 	m_client->reply(_id, jsonReply);
+}
+
+void LanguageServer::semanticTokensFull(MessageID _id, Json::Value const& _args)
+{
+	auto uri = _args["textDocument"]["uri"];
+
+	if (!compile(uri.as<string>()))
+		return;
+
+	auto const sourceName = pathToSourceUnitName(uri.as<string>());
+	SourceUnit const& ast = m_compilerStack->ast(sourceName);
+	m_compilerStack->charStream(sourceName);
+	SemanticTokensBuilder semanticTokensBuilder;
+	Json::Value data = semanticTokensBuilder.build(ast, m_compilerStack->charStream(sourceName));
+
+	Json::Value reply = Json::objectValue;
+	reply["data"] = data;
+
+	m_client->reply(_id, reply);
 }
 
 void LanguageServer::log(string _message)

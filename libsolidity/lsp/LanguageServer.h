@@ -94,6 +94,7 @@ protected:
 	void handleTextDocumentHighlight(MessageID _id, Json::Value const& _args);
 	void handleTextDocumentReferences(MessageID _id, Json::Value const& _args);
 	void handleGotoDefinition(MessageID _id, Json::Value const& _args);
+	void semanticTokensFull(MessageID _id, Json::Value const& _args);
 
 	/**
 	 * Constructs some tooltip (hover) text.
