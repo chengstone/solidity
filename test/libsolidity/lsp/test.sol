@@ -15,6 +15,7 @@ enum Wheather {
 contract MyContract
 {
     Wheather lastWheather = Wheather.Rainy;
+    uint constant fixedValue = 1234;
 
     constructor()
     {
@@ -24,14 +25,14 @@ contract MyContract
     ///
     /// @param a me it is
     /// @param b me it is also
-    function sum(uint a, uint b) public pure returns (uint)
+    function sum(uint a, uint b) public pure returns (uint result)
     {
         Wheather weather = Wheather.Sunny;
-        uint foo = 12345;
+        uint foo = 12345 + fixedValue;
         if (a == b)
             revert E(a, b);
         weather = Wheather.Cloudy;
-        return a + b + foo;
+        result = a + b + foo;
     }
 
     function main() public pure returns (uint)

@@ -17,6 +17,9 @@
 // SPDX-License-Identifier: GPL-3.0
 #include <solc/LSPTCPTransport.h>
 
+#include <libsolutil/JSON.h>
+#include <fmt/format.h>
+
 #include <optional>
 #include <string>
 #include <iostream>
@@ -98,6 +101,7 @@ void LSPTCPTransport::notify(std::string const& _method, Json::Value const& _par
 
 void LSPTCPTransport::reply(MessageID _id, Json::Value const& _result)
 {
+	fmt::print("reply: {}\n{}\n", util::jsonPrettyPrint(_id), util::jsonPrettyPrint(_result));
 	if (m_jsonTransport.has_value())
 		m_jsonTransport.value().reply(_id, _result);
 }

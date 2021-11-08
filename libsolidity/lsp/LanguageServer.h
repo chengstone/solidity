@@ -172,6 +172,7 @@ protected:
 
 	/// FileReader is used for reading files during comilation phase but is also used as VFS for the LSP.
 	std::unique_ptr<frontend::FileReader> m_fileReader;
+	std::map<std::string, std::string> m_fileMappings; // Remember reverse mapping so we can reconstruct the URI.
 
 	/// Workspace root directory
 	boost::filesystem::path m_basePath;

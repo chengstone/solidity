@@ -210,7 +210,7 @@ Json::Value LanguageServer::toJson(SourceLocation const& _location) const
 {
 	solAssert(_location.sourceName);
 	Json::Value item = Json::objectValue;
-	item["uri"] = *_location.sourceName;
+	item["uri"] = m_fileMappings.at(*_location.sourceName);
 	item["range"] = toRange(_location);
 	return item;
 }
@@ -530,6 +530,7 @@ void LanguageServer::handleTextDocumentDidOpen(MessageID /*_id*/, Json::Value co
 	auto const text = _args["textDocument"]["text"].asString();
 	auto uri = _args["textDocument"]["uri"].asString();
 	auto sourceName = m_fileReader->cliPathToSourceUnitName(uri);
+	m_fileMappings[sourceName] = uri; // Remember reverse mapping so we can reconstruct the URI.
 	m_fileReader->setSource(uri, text);
 	compileSourceAndReport(uri);
 }

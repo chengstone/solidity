@@ -88,9 +88,18 @@ class SolidityLSPTestSuite:
         self.parse_args_and_prepare()
         self.start_solc_lsp()
 
-        workspace_folders = [{'name': 'solidity-lsp', 'uri': self.project_root_uri}]
-        print(self.lsp_client.initialize(self.lsp_proc.pid, None, self.project_root_uri, None, LSP_CLIENT_CAPS, "off", workspace_folders))
-        print(self.lsp_client.initialized())
+        workspace_folders = [
+            {'name': 'solidity-lsp', 'uri': self.project_root_uri}
+        ]
+
+        traceServer = 'off'
+        reply = self.lsp_client.initialize(self.lsp_proc.pid, None, self.project_root_uri, None, LSP_CLIENT_CAPS, traceServer, workspace_folders)
+        # Maybe we want to check the init response? Expect certain features to be announced?
+        print("reply for initialize(): {}".format(reply))
+
+        reply = self.lsp_client.initialized()
+        # Expects reply to be []
+
         self.run_all_tests()
         self.cleanup()
 
@@ -108,44 +117,64 @@ class SolidityLSPTestSuite:
             nargs="?"
         )
         parser.add_argument(
-            'test_dir',
+            'project_root_dir',
             type=str,
             default=os.path.dirname(os.path.realpath(__file__)),
-            help='Path to Solidity LSP test-project\'s directory',
+            help='Path to Solidity project\'s root directory (must be fully qualified).',
             nargs="?"
         )
         args = parser.parse_args()
 
         self.solc_path = args.solc_path
-        self.test_dir = args.test_dir
-        self.project_root_uri = 'file://' + self.test_dir # '/home/trapni/work/solidity/'
-        self.test_file_path = self.test_dir + "test.sol"
-        self.test_file_uri = "file://" + self.test_file_path
-        self.test_file_contents = open(self.test_file_path, "r").read()
+        self.project_root_dir = args.project_root_dir # '/home/trapni/work/solidity/'
+        self.project_root_uri = 'file://' + self.project_root_dir
+        self.published_diagnostics = []
+
+    def get_test_file_path(self, _test_case_name):
+        return "{}/test/libsolidity/lsp/{}.sol".format(self.project_root_dir, _test_case_name)
+
+    def get_test_file_uri(self, _test_case_name):
+        return "file://" + self.get_test_file_path(_test_case_name)
+
+    def get_test_file_contents(self, _test_case_name):
+        return open(self.get_test_file_path(_test_case_name), "r").read()
+
+    def on_publish_diagnostics(self, _diagnostics):
+        print("published diagnostics: {}".format(_diagnostics))
+        self.published_diagnostics.append(_diagnostics)
+        pass
 
     def start_solc_lsp(self):
-        print("Opening LSP backend: {}".format(self.solc_path))
-        self.lsp_proc = subprocess.Popen([self.solc_path, "--lsp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print("Starting LSP server: {}".format(self.solc_path))
+
+        self.lsp_proc = subprocess.Popen(
+            [self.solc_path, "--lsp"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
         read_pipe = ReadPipe(self.lsp_proc.stderr)
         read_pipe.start()
 
-        # To work with socket: sock_fd = sock.makefile()
-        lsp_endpoint = pylspclient.LspEndpoint(pylspclient.JsonRpcEndpoint(
-            self.lsp_proc.stdin,
-            self.lsp_proc.stdout))
+        lsp_endpoint = pylspclient.LspEndpoint(
+            json_rpc_endpoint=pylspclient.JsonRpcEndpoint(
+                self.lsp_proc.stdin,
+                self.lsp_proc.stdout
+            ),
+            notify_callbacks={
+                'textDocument/publishDiagnostics': lambda x: self.on_publish_diagnostics(x)
+            }
+        )
         self.lsp_client = pylspclient.LspClient(lsp_endpoint)
 
-    def run_all_tests(self):
+    def lsp_open_file(self, _test_case_name):
         version = 1
-        self.lsp_client.didOpen(pylspclient.lsp_structs.TextDocumentItem(self.test_file_uri, SOLIDITY_LANGUAGE_ID, version, self.test_file_contents))
-        try:
-            symbols = self.lsp_client.documentSymbol(pylspclient.lsp_structs.TextDocumentIdentifier(self.test_file_uri))
-            for symbol in symbols:
-                print(symbol.name)
-        except Exception as e:
-            # documentSymbol is supported from version 8.
-            print("Failed to document symbols: {}".format(e))
+        file_uri = self.get_test_file_uri(_test_case_name)
+        file_contents = self.get_test_file_contents(_test_case_name)
+        self.lsp_client.didOpen(pylspclient.lsp_structs.TextDocumentItem(file_uri, SOLIDITY_LANGUAGE_ID, version, file_contents))
 
+    def run_all_tests(self):
         self.test_definition()
         self.test_documentHighlight()
         self.test_hover()
@@ -157,14 +186,25 @@ class SolidityLSPTestSuite:
     def test_definition(self):
         """
         Tests goto-definition. The following tokens can be used to jump from:
-        - function parameter
-        - variable
-        - enum value (should jump to the definition of that enum value)
-        - import statement (should jump to the location to be imported)
-        - ...(TODO)?
         """
-        self.lsp_client.definition(pylspclient.lsp_structs.TextDocumentIdentifier(self.test_file_uri), pylspclient.lsp_structs.Position(39, 16))
-        #self.lsp_client.definition(pylspclient.lsp_structs.TextDocumentIdentifier(self.test_file_uri), pylspclient.lsp_structs.Position(14, 4))
+
+        # identifier in expression: `weather`
+        TEST_NAME = 'test_definition'
+        self.lsp_open_file(TEST_NAME)
+        file_uri = self.get_test_file_uri(TEST_NAME)
+        print("FILE URI: {}".format(file_uri))
+        result = self.lsp_client.definition(
+                pylspclient.lsp_structs.TextDocumentIdentifier(file_uri),
+                pylspclient.lsp_structs.Position(26, 9))
+        print("RESULT RECEIVED IS: {}".format(result))
+
+        # TODO: test on return parameter symbol
+        # TODO: test on function parameter symbol
+        # TODO: test on enum type symbol in expression
+        # TODO: test on enum value symbol in expression
+        # TODO: test on import statement to jump to imported file
+
+        os.system("sleep 1") # quick workaround, just wait a bit
         pass
 
     def test_implementation(self):

@@ -26,7 +26,7 @@ using namespace std;
 using namespace solidity::langutil;
 using namespace solidity::frontend;
 
-#if !defined(NDEBUG)
+#if 0 // !defined(NDEBUG)
 #define DPRINT(x) do { std::cerr << (x) << std::endl; } while (0)
 #else
 #define DPRINT(x) do {} while (false)
