@@ -1996,6 +1996,7 @@ void TypeChecker::typeCheckABIEncodeFunctions(
 		_functionType->kind() == FunctionType::Kind::ABIEncode ||
 		_functionType->kind() == FunctionType::Kind::ABIEncodePacked ||
 		_functionType->kind() == FunctionType::Kind::ABIEncodeWithSelector ||
+		_functionType->kind() == FunctionType::Kind::ABIEncodeChecked ||
 		_functionType->kind() == FunctionType::Kind::ABIEncodeWithSignature,
 		"ABI function has unexpected FunctionType::Kind."
 	);
@@ -2019,6 +2020,10 @@ void TypeChecker::typeCheckABIEncodeFunctions(
 
 	// Perform standard function call type checking
 	typeCheckFunctionGeneralChecks(_functionCall, _functionType);
+
+	// No further generic checks needed as we do a precise check for Checked
+	if (_functionType->kind() == FunctionType::Kind::ABIEncodeChecked)
+		return;
 
 	// Check additional arguments for variadic functions
 	vector<ASTPointer<Expression const>> const& arguments = _functionCall.arguments();
@@ -2076,6 +2081,76 @@ void TypeChecker::typeCheckABIEncodeFunctions(
 				"This type cannot be encoded."
 			);
 	}
+}
+
+#include <typeindex>
+#include <typeinfo>
+void TypeChecker::typeCheckABIEncodeCheckedfunction(FunctionCall const& _functionCall)
+{
+	vector<ASTPointer<Expression const>> const& arguments = _functionCall.arguments();
+
+	// Expecting first argument to be the function pointer and second to be a tuple.
+	if (arguments.size() != 2)
+	{
+		m_errorReporter.typeError(
+			6219_error,
+			_functionCall.location(),
+			"Expected two arguments: a function pointer followed by a tuple."
+		);
+		return;
+	}
+
+	auto const functionPointerType = dynamic_cast<FunctionTypePointer>(type(*arguments.front()));
+	auto const argumentTuple = dynamic_cast<TupleType const*>(type(*arguments[1]));
+
+	if (!functionPointerType)
+	{
+		m_errorReporter.typeError(
+			5511_error,
+			_functionCall.location(),
+			"Expected first argument to be a function pointer, not \"" +
+			type(*arguments.front())->canonicalName() +
+			"\"."
+		);
+		return;
+	}
+
+	// There are no checks we can do if all types are accepted
+	if (functionPointerType->takesArbitraryParameters())
+		return;
+
+	std::vector<Type const*> givenArguments;
+
+	if (!argumentTuple)
+		givenArguments.push_back(type(*arguments[1]));
+	else
+		givenArguments = argumentTuple->components();
+
+	size_t const numArguments = functionPointerType->parameterTypes().size();
+
+	if (givenArguments.size() != numArguments)
+	{
+		m_errorReporter.typeError(
+			7788_error,
+			_functionCall.location(),
+			"Expected " + to_string(numArguments) + " instead of " + to_string(givenArguments.size()) + " components for the tuple parameter."
+		);
+		return;
+	}
+
+	for (size_t i = 0; i < numArguments; i++)
+		if (!givenArguments[i]->isImplicitlyConvertibleTo(*functionPointerType->parameterTypes()[i]))
+			m_errorReporter.typeError(
+				5407_error,
+				_functionCall.location(),
+				"Parameter mismatch: Expected \"" +
+				functionPointerType->parameterTypes()[i]->canonicalName() +
+				"\" instead of \"" +
+				givenArguments[i]->canonicalName() +
+				"\" for the tuple component at position " +
+				to_string(i) +
+				"."
+			);
 }
 
 void TypeChecker::typeCheckBytesConcatFunction(
@@ -2507,9 +2582,14 @@ bool TypeChecker::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::ABIEncodePacked:
 		case FunctionType::Kind::ABIEncodeWithSelector:
 		case FunctionType::Kind::ABIEncodeWithSignature:
+		case FunctionType::Kind::ABIEncodeChecked:
 		{
 			typeCheckABIEncodeFunctions(_functionCall, functionType);
 			returnTypes = functionType->returnParameterTypes();
+
+			if (functionType->kind() == FunctionType::Kind::ABIEncodeChecked)
+				typeCheckABIEncodeCheckedfunction(_functionCall);
+
 			break;
 		}
 		case FunctionType::Kind::MetaType:

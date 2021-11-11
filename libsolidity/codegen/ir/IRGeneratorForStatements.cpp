@@ -1104,29 +1104,57 @@ void IRGeneratorForStatements::endVisit(FunctionCall const& _functionCall)
 	case FunctionType::Kind::ABIEncode:
 	case FunctionType::Kind::ABIEncodePacked:
 	case FunctionType::Kind::ABIEncodeWithSelector:
+	case FunctionType::Kind::ABIEncodeChecked:
 	case FunctionType::Kind::ABIEncodeWithSignature:
 	{
 		bool const isPacked = functionType->kind() == FunctionType::Kind::ABIEncodePacked;
 		solAssert(functionType->padArguments() != isPacked, "");
 		bool const hasSelectorOrSignature =
 			functionType->kind() == FunctionType::Kind::ABIEncodeWithSelector ||
+			functionType->kind() == FunctionType::Kind::ABIEncodeChecked ||
 			functionType->kind() == FunctionType::Kind::ABIEncodeWithSignature;
 
 		TypePointers argumentTypes;
 		TypePointers targetTypes;
 		vector<string> argumentVars;
-		for (size_t i = 0; i < arguments.size(); ++i)
+		string selector;
+		vector<ASTPointer<Expression const>> argumentsEncodeFunction;
+
+		if (functionType->kind() == FunctionType::Kind::ABIEncodeChecked)
 		{
-			// ignore selector
-			if (hasSelectorOrSignature && i == 0)
-				continue;
-			argumentTypes.emplace_back(&type(*arguments[i]));
-			targetTypes.emplace_back(type(*arguments[i]).fullEncodingType(false, true, isPacked));
-			argumentVars += IRVariable(*arguments[i]).stackSlots();
+			solAssert(arguments.size() == 2, "");
+			auto const tuple = dynamic_cast<TupleExpression const*>(arguments[1].get());
+
+			// Account for tuples with one component which become that component
+			if (!tuple)
+				argumentsEncodeFunction.push_back(arguments[1]);
+			else
+				for (auto component: tuple->components())
+					argumentsEncodeFunction.push_back(component);
+		}
+		else
+			for (size_t i = 0; i < arguments.size(); ++i)
+			{
+				// ignore selector
+				if (hasSelectorOrSignature && i == 0)
+					continue;
+				argumentsEncodeFunction.push_back(arguments[i]);
+			}
+
+		for (auto const& argument: argumentsEncodeFunction)
+		{
+			argumentTypes.emplace_back(&type(*argument));
+			targetTypes.emplace_back(type(*argument).fullEncodingType(false, true, isPacked));
+			argumentVars += IRVariable(*argument).stackSlots();
 		}
 
-		string selector;
-		if (functionType->kind() == FunctionType::Kind::ABIEncodeWithSignature)
+		if (functionType->kind() == FunctionType::Kind::ABIEncodeChecked)
+		{
+			auto const functionPtr = dynamic_cast<FunctionTypePointer>(&type(*arguments[0]));
+			solAssert(functionPtr, "");
+			selector = formatNumber(util::selectorFromSignature(functionPtr->externalSignature()));
+		}
+		else if (functionType->kind() == FunctionType::Kind::ABIEncodeWithSignature)
 		{
 			// hash the signature
 			Type const& selectorType = type(*arguments.front());
@@ -1833,7 +1861,7 @@ void IRGeneratorForStatements::endVisit(MemberAccess const& _memberAccess)
 
 			define(_memberAccess) << requestedValue << "\n";
 		}
-		else if (set<string>{"encode", "encodePacked", "encodeWithSelector", "encodeWithSignature", "decode"}.count(member))
+		else if (set<string>{"encode", "encodePacked", "encodeWithSelector", "encodeChecked", "encodeWithSignature", "decode"}.count(member))
 		{
 			// no-op
 		}

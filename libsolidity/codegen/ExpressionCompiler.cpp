@@ -1236,22 +1236,39 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::ABIEncode:
 		case FunctionType::Kind::ABIEncodePacked:
 		case FunctionType::Kind::ABIEncodeWithSelector:
+		case FunctionType::Kind::ABIEncodeChecked:
 		case FunctionType::Kind::ABIEncodeWithSignature:
 		{
 			bool const isPacked = function.kind() == FunctionType::Kind::ABIEncodePacked;
 			bool const hasSelectorOrSignature =
 				function.kind() == FunctionType::Kind::ABIEncodeWithSelector ||
+				function.kind() == FunctionType::Kind::ABIEncodeChecked ||
 				function.kind() == FunctionType::Kind::ABIEncodeWithSignature;
 
 			TypePointers argumentTypes;
-			TypePointers targetTypes;
-			for (unsigned i = 0; i < arguments.size(); ++i)
+
+			ASTNode::listAccept(arguments, *this);
+
+			if (function.kind() == FunctionType::Kind::ABIEncodeChecked)
 			{
-				arguments[i]->accept(*this);
-				// Do not keep the selector as part of the ABI encoded args
-				if (!hasSelectorOrSignature || i > 0)
-					argumentTypes.push_back(arguments[i]->annotation().type);
+				solAssert(arguments.size() == 2, "");
+
+				auto const tupleType = dynamic_cast<TupleType const*>(arguments[1]->annotation().type);
+
+				// Account for tuples with one component which become that component
+				if (!tupleType)
+					argumentTypes.emplace_back(arguments[1]->annotation().type);
+				else
+					argumentTypes = tupleType->components();
 			}
+			else
+				for (unsigned i = 0; i < arguments.size(); ++i)
+				{
+					// Do not keep the selector as part of the ABI encoded args
+					if (!hasSelectorOrSignature || i > 0)
+						argumentTypes.push_back(arguments[i]->annotation().type);
+				}
+
 			utils().fetchFreeMemoryPointer();
 			// stack now: [<selector>] <arg1> .. <argN> <free_mem>
 
@@ -1282,35 +1299,45 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 
 			if (hasSelectorOrSignature)
 			{
-				// stack: <selector> <memory pointer>
-				solAssert(arguments.size() >= 1, "");
-				Type const* selectorType = arguments[0]->annotation().type;
-				utils().moveIntoStack(selectorType->sizeOnStack());
-				Type const* dataOnStack = selectorType;
-				// stack: <memory pointer> <selector>
-				if (function.kind() == FunctionType::Kind::ABIEncodeWithSignature)
-				{
-					// hash the signature
-					if (auto const* stringType = dynamic_cast<StringLiteralType const*>(selectorType))
-					{
-						m_context << util::selectorFromSignature(stringType->value());
-						dataOnStack = TypeProvider::fixedBytes(4);
-					}
-					else
-					{
-						utils().fetchFreeMemoryPointer();
-						// stack: <memory pointer> <selector> <free mem ptr>
-						utils().packedEncode(TypePointers{selectorType}, TypePointers());
-						utils().toSizeAfterFreeMemoryPointer();
-						m_context << Instruction::KECCAK256;
-						// stack: <memory pointer> <hash>
+				Type const* dataOnStack = nullptr;
 
-						dataOnStack = TypeProvider::fixedBytes(32);
-					}
+				if (function.kind() == FunctionType::Kind::ABIEncodeChecked)
+				{
+					auto const functionPtr = dynamic_cast<FunctionTypePointer>(arguments[0]->annotation().type);
+					solAssert(functionPtr, "");
+					m_context << util::selectorFromSignature(functionPtr->externalSignature());
+					dataOnStack = TypeProvider::fixedBytes(4);
 				}
 				else
 				{
-					solAssert(function.kind() == FunctionType::Kind::ABIEncodeWithSelector, "");
+					// stack: <selector> <memory pointer>
+					solAssert(arguments.size() >= 1, "");
+					Type const* selectorType = arguments[0]->annotation().type;
+					utils().moveIntoStack(selectorType->sizeOnStack());
+					dataOnStack = selectorType;
+					// stack: <memory pointer> <selector>
+					if (function.kind() == FunctionType::Kind::ABIEncodeWithSignature)
+					{
+						// hash the signature
+						if (auto const* stringType = dynamic_cast<StringLiteralType const*>(selectorType))
+						{
+							m_context << util::selectorFromSignature(stringType->value());
+							dataOnStack = TypeProvider::fixedBytes(4);
+						}
+						else
+						{
+							utils().fetchFreeMemoryPointer();
+							// stack: <memory pointer> <selector> <free mem ptr>
+							utils().packedEncode(TypePointers{selectorType}, TypePointers());
+							utils().toSizeAfterFreeMemoryPointer();
+							m_context << Instruction::KECCAK256;
+							// stack: <memory pointer> <hash>
+
+							dataOnStack = TypeProvider::fixedBytes(32);
+						}
+					}
+					else
+						solAssert(function.kind() == FunctionType::Kind::ABIEncodeWithSelector, "");
 				}
 
 				utils().convertType(*dataOnStack, FixedBytesType(4), true);

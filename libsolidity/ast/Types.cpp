@@ -2935,6 +2935,7 @@ string FunctionType::richIdentifier() const
 	case Kind::ABIEncode: id += "abiencode"; break;
 	case Kind::ABIEncodePacked: id += "abiencodepacked"; break;
 	case Kind::ABIEncodeWithSelector: id += "abiencodewithselector"; break;
+	case Kind::ABIEncodeChecked: id += "abiencodechecked"; break;
 	case Kind::ABIEncodeWithSignature: id += "abiencodewithsignature"; break;
 	case Kind::ABIDecode: id += "abidecode"; break;
 	case Kind::MetaType: id += "metatype"; break;
@@ -3499,6 +3500,7 @@ bool FunctionType::isPure() const
 		m_kind == Kind::ABIEncode ||
 		m_kind == Kind::ABIEncodePacked ||
 		m_kind == Kind::ABIEncodeWithSelector ||
+		m_kind == Kind::ABIEncodeChecked ||
 		m_kind == Kind::ABIEncodeWithSignature ||
 		m_kind == Kind::ABIDecode ||
 		m_kind == Kind::MetaType ||
@@ -3998,6 +4000,15 @@ MemberList::MemberMap MagicType::nativeMembers(ASTNode const*) const
 				strings{1, ""},
 				strings{1, ""},
 				FunctionType::Kind::ABIEncodeWithSelector,
+				true,
+				StateMutability::Pure
+			)},
+			{"encodeChecked", TypeProvider::function(
+				TypePointers{},
+				TypePointers{TypeProvider::array(DataLocation::Memory)},
+				strings{},
+				strings{1, ""},
+				FunctionType::Kind::ABIEncodeChecked,
 				true,
 				StateMutability::Pure
 			)},

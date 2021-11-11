@@ -1237,6 +1237,7 @@ public:
 		ABIEncode,
 		ABIEncodePacked,
 		ABIEncodeWithSelector,
+		ABIEncodeChecked,
 		ABIEncodeWithSignature,
 		ABIDecode,
 		GasLeft, ///< gasleft()

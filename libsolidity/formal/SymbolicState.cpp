@@ -241,6 +241,7 @@ void SymbolicState::buildABIFunctions(set<FunctionCall const*> const& _abiFuncti
 			outTypes = returnTypes;
 			if (
 				t->kind() == FunctionType::Kind::ABIEncodeWithSelector ||
+				t->kind() == FunctionType::Kind::ABIEncodeChecked ||
 				t->kind() == FunctionType::Kind::ABIEncodeWithSignature
 			)
 			{
