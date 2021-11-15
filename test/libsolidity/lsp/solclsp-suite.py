@@ -246,12 +246,15 @@ class SolcTests:
 
         self.solc.published_diagnostics.clear()
 
-
-        # identifier in expression: `weather` in assignment
+        # identifier in expression: `weather` (enum var) in assignment
         result = self.solc.client.definition(
                 pylspclient.lsp_structs.TextDocumentIdentifier(self.get_test_file_uri(TEST_NAME)),
-                pylspclient.lsp_structs.Position(24, 9))
-        print("RESULT RECEIVED IS: {}".format(result))
+                pylspclient.lsp_structs.Position(23, 9)) # line/col numbers are 0-based
+        self.expect(len(result) == 1, "only one definition returned")
+        self.expect(result[0].range.start.line == 19, "line 20")
+        self.expect(result[0].range.start.character == 16, "vardecl begin")
+        self.expect(result[0].range.end.line == 19, "line 20")
+        self.expect(result[0].range.end.character == 23, "vardecl end")
 
         # TODO: test on return parameter symbol
         # TODO: test on function parameter symbol
