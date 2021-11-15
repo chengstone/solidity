@@ -11,14 +11,20 @@
 #
 # - work on test suite via python
 
-import pylspclient
-import subprocess
-import threading
 import argparse
 import os
+import subprocess
+import threading
+
 from typing import List
 from deepdiff import DeepDiff
 from pprint import pprint
+
+# Requires the one from https://github.com/christianparpart/pylspclient
+# Use `pip install -e $PATH_TO_LIB_CHECKOUT --user` for local development & testing
+import pylspclient
+
+lsp_types = pylspclient.lsp_structs
 
 SGR_RESET = '\033[m'
 SGR_TEST_BEGIN = '\033[1;33m'
@@ -49,7 +55,7 @@ class ReadPipe(threading.Thread):
         finally:
             print("ReadPipe: terminating")
 
-SOLIDITY_LANGUAGE_ID = "solidity" # pylspclient.lsp_structs.LANGUAGE_IDENTIFIER.C
+SOLIDITY_LANGUAGE_ID = "solidity" # lsp_types.LANGUAGE_IDENTIFIER.C
 
 LSP_CLIENT_CAPS = {
         'textDocument': {'codeAction': {'dynamicRegistration': True},
@@ -171,7 +177,7 @@ class SolcTests:
         version = 1
         file_uri = self.get_test_file_uri(_test_case_name)
         file_contents = self.get_test_file_contents(_test_case_name)
-        self.solc.client.didOpen(pylspclient.lsp_structs.TextDocumentItem(
+        self.solc.client.didOpen(lsp_types.TextDocumentItem(
             file_uri, SOLIDITY_LANGUAGE_ID, version, file_contents
         ))
 
@@ -246,15 +252,17 @@ class SolcTests:
 
         self.solc.published_diagnostics.clear()
 
-        # identifier in expression: `weather` (enum var) in assignment
+        # LHS enum variable in assignment: `weather`
         result = self.solc.client.definition(
-                pylspclient.lsp_structs.TextDocumentIdentifier(self.get_test_file_uri(TEST_NAME)),
-                pylspclient.lsp_structs.Position(23, 9)) # line/col numbers are 0-based
+                lsp_types.TextDocumentIdentifier(self.get_test_file_uri(TEST_NAME)),
+                lsp_types.Position(23, 9)) # line/col numbers are 0-based
         self.expect(len(result) == 1, "only one definition returned")
-        self.expect(result[0].range.start.line == 19, "line 20")
-        self.expect(result[0].range.start.character == 16, "vardecl begin")
-        self.expect(result[0].range.end.line == 19, "line 20")
-        self.expect(result[0].range.end.character == 23, "vardecl end")
+        self.expect(result[0].range == lsp_types.Range(lsp_types.Position(19, 16),
+                                                       lsp_types.Position(19, 23)), "range check")
+        # self.expect(result[0].range.start.line == 19, "line 20")
+        # self.expect(result[0].range.start.character == 16, "vardecl begin")
+        # self.expect(result[0].range.end.line == 19, "line 20")
+        # self.expect(result[0].range.end.character == 23, "vardecl end")
 
         # TODO: test on return parameter symbol
         # TODO: test on function parameter symbol
@@ -288,15 +296,15 @@ class SolcTests:
         pass
 
     def test_signatureHelp(self):
-        #self.solc.client.signatureHelp(pylspclient.lsp_structs.TextDocumentIdentifier(self.test_file_uri), pylspclient.lsp_structs.Position(14, 4))
+        #self.solc.client.signatureHelp(lsp_types.TextDocumentIdentifier(self.test_file_uri),
         pass
 
     def test_completion(self):
         # Exemplary code completion test:
         # self.solc.client.completion(
-        #     pylspclient.lsp_structs.TextDocumentIdentifier(self.test_file_uri),
-        #     pylspclient.lsp_structs.Position(14, 4),
-        #     pylspclient.lsp_structs.CompletionContext(pylspclient.lsp_structs.CompletionTriggerKind.Invoked)
+        #     lsp_types.TextDocumentIdentifier(self.test_file_uri),
+        #     lsp_types.Position(14, 4),
+        #     lsp_types.CompletionContext(lsp_types.CompletionTriggerKind.Invoked)
         # )
         pass
     # }}}
