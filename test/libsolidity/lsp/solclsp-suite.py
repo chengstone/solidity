@@ -1,15 +1,7 @@
 #!/usr/bin/env python3
 
 # DEPENDENCIES:
-#     pip install git+https://github.com/yeger00/pylspclient.git --user
-
-# NOTES
-# YESTERDAY
-# - improved semantic tokens highlighting coverage
-# TODAY
-# - (TRYING TO FINISH) natspec/signature: missing cases, trying to get the natspec-tooltip formatted
-#
-# - work on test suite via python
+#     pip install git+https://github.com/christianparpart/pylspclient.git --user
 
 import argparse
 import os
