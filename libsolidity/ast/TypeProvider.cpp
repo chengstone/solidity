@@ -154,6 +154,20 @@ array<unique_ptr<MagicType>, 4> const TypeProvider::m_magics{{
 	// MetaType is stored separately
 }};
 
+Declaration const* Type::typeDefinition() const
+{
+	// This could be a virtual function but it is problematic because of the inter-dependencies
+	// between AST.h and Types.h
+	if (auto s = dynamic_cast<StructType const*>(this))
+		return &s->structDefinition();
+	else if (auto e = dynamic_cast<EnumType const*>(this))
+		return &e->enumDefinition();
+	else if (auto u = dynamic_cast<UserDefinedValueType const*>(this))
+		return &u->definition();
+	else
+		return nullptr;
+}
+
 inline void clearCache(Type const& type)
 {
 	type.clearCache();

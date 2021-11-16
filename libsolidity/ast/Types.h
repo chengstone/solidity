@@ -369,6 +369,10 @@ public:
 	/// are returned without modification.
 	virtual TypeResult interfaceType(bool /*_inLibrary*/) const { return nullptr; }
 
+	/// @returns the declaration of a user defined type (enum, struct, user defined value type).
+	/// Returns nullptr otherwise.
+	Declaration const* typeDefinition() const;
+
 	/// Clears all internally cached values (if any).
 	virtual void clearCache() const;
 

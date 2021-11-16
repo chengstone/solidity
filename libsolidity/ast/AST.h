@@ -662,9 +662,10 @@ public:
 		int64_t _id,
 		SourceLocation const& _location,
 		Functions _lhs,
-		ASTPointer<TypeName> _typeName
+		ASTPointer<TypeName> _typeName,
+		bool _exported = false
 	):
-		ASTNode(_id, _location), m_functions(_lhs), m_typeName(std::move(_typeName))
+		ASTNode(_id, _location), m_functions(_lhs), m_typeName(std::move(_typeName)), m_exported(_exported)
 	{
 	}
 
@@ -676,6 +677,8 @@ public:
 
 	Functions const& functions() const { return m_functions; }
 
+	bool exported() const { return m_exported; }
+
 	/// @returns a list of all identifiers on the left hand side, regardless
 	/// of whether they are inside `{}` or not.
 	/// Returns an empty list for asterisk.
@@ -684,6 +687,7 @@ public:
 private:
 	Functions m_functions;
 	ASTPointer<TypeName> m_typeName;
+	bool m_exported = false;
 };
 
 class StructDefinition: public Declaration, public ScopeOpener

@@ -330,6 +330,9 @@ Type const* Type::fullEncodingType(bool _inLibraryCall, bool _encoderV2, bool) c
 
 MemberList::MemberMap Type::boundFunctions(Type const& _type, ASTNode const& _scope)
 {
+	// TODO look up type definition
+	// check for `export using for` in same scope
+	// apply functions
 	vector<UsingForDirective const*> usingForDirectives;
 	SourceUnit const* sourceUnit = dynamic_cast<SourceUnit const*>(&_scope);
 	if (sourceUnit)
@@ -343,6 +346,11 @@ MemberList::MemberMap Type::boundFunctions(Type const& _type, ASTNode const& _sc
 	}
 	else
 		solAssert(false, "");
+
+	if (Declaration const* typeDefinition = _type.typeDefinition())
+		for (auto usingFor: ASTNode::filteredNodes<UsingForDirective>(sourceUnit->nodes()))
+			if (usingFor->exported())
+				usingForDirectives.emplace_back(usingFor);
 
 	// Normalise data location of type.
 	DataLocation typeLocation = DataLocation::Storage;

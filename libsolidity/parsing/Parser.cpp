@@ -141,6 +141,13 @@ ASTPointer<SourceUnit> Parser::parse(CharStream& _charStream)
 					nodes.push_back(parseVariableDeclaration(options));
 					expectToken(Token::Semicolon);
 				}
+				else if (
+					// Workaround because `export` is not a keyword.
+					m_scanner->currentToken() == Token::Identifier &&
+					currentLiteral() == "export" &&
+					m_scanner->peekNextToken() == Token::Using
+				)
+					nodes.push_back(parseUsingDirective(true));
 				else
 					fatalParserError(7858_error, "Expected pragma, import directive or contract/interface/library/struct/enum/constant/function definition.");
 			}
@@ -393,7 +400,12 @@ ASTPointer<ContractDefinition> Parser::parseContractDefinition()
 				subNodes.push_back(parseModifierDefinition());
 			else if (currentTokenValue == Token::Event)
 				subNodes.push_back(parseEventDefinition());
-			else if (currentTokenValue == Token::Using)
+			else if (currentTokenValue == Token::Using || (
+				// Workaround because `export` is not a keyword.
+				currentTokenValue == Token::Identifier &&
+				currentLiteral() == "export" &&
+				m_scanner->peekNextToken() == Token::Using
+			))
 				subNodes.push_back(parseUsingDirective(false));
 			else
 				fatalParserError(9182_error, "Function, variable, struct or modifier declaration expected.");
@@ -964,6 +976,17 @@ ASTPointer<UsingForDirective> Parser::parseUsingDirective(bool _fileLevel)
 	RecursionGuard recursionGuard(*this);
 	ASTNodeFactory nodeFactory(*this);
 
+	bool exported = false;
+	if (
+		m_scanner->currentToken() == Token::Identifier &&
+		currentLiteral() == "export" &&
+		m_scanner->peekNextToken() == Token::Using
+	)
+	{
+		exported = true;
+		advance();
+	}
+
 	expectToken(Token::Using);
 
 	UsingForDirective::Functions functions;
@@ -1003,7 +1026,7 @@ ASTPointer<UsingForDirective> Parser::parseUsingDirective(bool _fileLevel)
 		typeName = parseTypeName();
 	nodeFactory.markEndPosition();
 	expectToken(Token::Semicolon);
-	return nodeFactory.createNode<UsingForDirective>(functions, typeName);
+	return nodeFactory.createNode<UsingForDirective>(functions, typeName, exported);
 }
 
 ASTPointer<ModifierInvocation> Parser::parseModifierInvocation()
