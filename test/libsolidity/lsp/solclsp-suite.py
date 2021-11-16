@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.9
 
 # DEPENDENCIES:
 #     pip install git+https://github.com/christianparpart/pylspclient.git --user
@@ -25,6 +25,10 @@ SGR_STATUS_FAIL = '\033[1;31m'
 SGR_INSPECT = '\033[1;35m'
 
 TEST_NAME = 'test_definition'
+
+def dinspect(text, obj):
+    print(SGR_INSPECT + "-- " + text + ":" + SGR_RESET)
+    pprint(obj)
 
 class ReadPipe(threading.Thread):
     """
@@ -144,7 +148,8 @@ class SolcInstance:
         self.read_pipe.join()
 
     def on_publish_diagnostics(self, _diagnostics) -> None:
-        print("published diagnostics: {}".format(_diagnostics))
+        print("Receiving published diagnostics:")
+        pprint(_diagnostics)
         self.published_diagnostics.append(_diagnostics)
 
 class SolcTests:
@@ -153,7 +158,7 @@ class SolcTests:
         self.project_root_dir = _project_root_dir
         self.project_root_uri = 'file://' + self.project_root_dir
         self.tests = 0
-        print("root dir: {}\n".format(self.project_root_dir))
+        print("root dir: {}".format(self.project_root_dir))
 
     # {{{ helpers
     def get_test_file_path(self, _test_case_name):
@@ -194,9 +199,6 @@ class SolcTests:
         pprint(diff)
         raise RuntimeError('Expectation failed.')
 
-    def inspect(self, _msg: str, _obj: object) -> None:
-        print("{}Inspect {}: {}{}".format(SGR_INSPECT, _msg, SGR_RESET, _obj))
-
     # }}}
 
     # {{{ actual tests
@@ -220,7 +222,7 @@ class SolcTests:
     def open_files_and_test_publish_diagnostics(self):
         self.lsp_open_file(TEST_NAME)
 
-        os.system('sleep 1') # TODO: wait_until_notification('published_diagnostics')
+        os.system('sleep .5') # TODO: wait_until_notification('published_diagnostics')
 
         # should have received one published_diagnostics notification
         print("-- len: {}".format(len(self.solc.published_diagnostics)))
@@ -232,7 +234,7 @@ class SolcTests:
         # containing one single diagnotics report
         diagnostics = published_diagnostics['diagnostics']
         self.expect(len(diagnostics) == 1, "one diagnostics")
-        self.inspect('diagnostic', diagnostics)
+        dinspect('diagnostic', diagnostics)
         diagnostic = diagnostics[0]
         self.expect(diagnostic['code'] == 3805, 'diagnostic: pre-release compiler')
         self.expect_equal('check range', diagnostic['range'], {'end': {'character': 0, 'line': 0}, 'start': {'character': 0, 'line': 0}})
@@ -251,10 +253,6 @@ class SolcTests:
         self.expect(len(result) == 1, "only one definition returned")
         self.expect(result[0].range == lsp_types.Range(lsp_types.Position(19, 16),
                                                        lsp_types.Position(19, 23)), "range check")
-        # self.expect(result[0].range.start.line == 19, "line 20")
-        # self.expect(result[0].range.start.character == 16, "vardecl begin")
-        # self.expect(result[0].range.end.line == 19, "line 20")
-        # self.expect(result[0].range.end.character == 23, "vardecl end")
 
         # TODO: test on return parameter symbol
         # TODO: test on function parameter symbol
