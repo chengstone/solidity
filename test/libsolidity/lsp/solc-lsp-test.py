@@ -2,6 +2,7 @@
 
 # DEPENDENCIES:
 #     pip install git+https://github.com/christianparpart/pylspclient.git --user
+# And for local development of pylspclient, use the editable mode of pip install.
 
 import argparse
 import os
@@ -26,9 +27,13 @@ SGR_INSPECT = '\033[1;35m'
 
 TEST_NAME = 'test_definition'
 
-def dinspect(text, obj):
+def dprint(text: str):
     print(SGR_INSPECT + "-- " + text + ":" + SGR_RESET)
-    pprint(obj)
+
+def dinspect(text, obj):
+    dprint(text)
+    if not(obj is None):
+        pprint(obj)
 
 class ReadPipe(threading.Thread):
     """
@@ -40,16 +45,16 @@ class ReadPipe(threading.Thread):
 
     def run(self):
         try:
-            print("ReadPipe: starting")
+            dprint("ReadPipe: starting")
             line = self.pipe.readline().decode('utf-8')
             while line:
                 print(line)
                 #print("\033[1;42m{}\033[m\n".format(line))
                 line = self.pipe.readline().decode('utf-8')
         except Exception as e:
-            print("ReadPipe: Unhandled exception: {}\n".format(e))
+            dprint("ReadPipe: Unhandled exception: {}".format(e))
         finally:
-            print("ReadPipe: terminating")
+            dprint("ReadPipe: terminating")
 
 SOLIDITY_LANGUAGE_ID = "solidity" # lsp_types.LANGUAGE_IDENTIFIER.C
 
@@ -120,7 +125,7 @@ class SolcInstance:
         self.client = pylspclient.LspClient(None)
 
     def __enter__(self):
-        print("Starting solc LSP instance: {}".format(self.solc_path))
+        dprint("Starting solc LSP instance: {}".format(self.solc_path))
         self.process = subprocess.Popen(
             [self.solc_path, "--lsp"],
             stdin=subprocess.PIPE,
@@ -142,13 +147,13 @@ class SolcInstance:
         return self
 
     def __exit__(self, _exception_type, _exception_value, _traceback) -> None:
-        print("Stopping solc instance.\n")
+        dprint("Stopping solc instance.")
         self.client.shutdown()
         self.client.exit()
         self.read_pipe.join()
 
     def on_publish_diagnostics(self, _diagnostics) -> None:
-        print("Receiving published diagnostics:")
+        dprint("Receiving published diagnostics:")
         pprint(_diagnostics)
         self.published_diagnostics.append(_diagnostics)
 
@@ -158,11 +163,11 @@ class SolcTests:
         self.project_root_dir = _project_root_dir
         self.project_root_uri = 'file://' + self.project_root_dir
         self.tests = 0
-        print("root dir: {}".format(self.project_root_dir))
+        dprint("root dir: {}".format(self.project_root_dir))
 
     # {{{ helpers
     def get_test_file_path(self, _test_case_name):
-        return "{}/test/libsolidity/lsp/{}.sol".format(self.project_root_dir, _test_case_name)
+        return "{}/{}.sol".format(self.project_root_dir, _test_case_name)
 
     def get_test_file_uri(self, _test_case_name):
         return "file://" + self.get_test_file_path(_test_case_name)
@@ -225,7 +230,7 @@ class SolcTests:
         os.system('sleep .5') # TODO: wait_until_notification('published_diagnostics')
 
         # should have received one published_diagnostics notification
-        print("-- len: {}".format(len(self.solc.published_diagnostics)))
+        dprint("len: {}".format(len(self.solc.published_diagnostics)))
         self.expect(len(self.solc.published_diagnostics) == 1, "one published_diagnostics message")
         published_diagnostics = self.solc.published_diagnostics[0]
 
@@ -250,11 +255,22 @@ class SolcTests:
         result = self.solc.client.definition(
                 lsp_types.TextDocumentIdentifier(self.get_test_file_uri(TEST_NAME)),
                 lsp_types.Position(23, 9)) # line/col numbers are 0-based
+        dinspect('weather var', result)
         self.expect(len(result) == 1, "only one definition returned")
         self.expect(result[0].range == lsp_types.Range(lsp_types.Position(19, 16),
                                                        lsp_types.Position(19, 23)), "range check")
 
-        # TODO: test on return parameter symbol
+        # TODO: test on return parameter symbol: `result` at 35:9 (begin of identifier)
+        result = self.solc.client.definition(
+                lsp_types.TextDocumentIdentifier(self.get_test_file_uri(TEST_NAME)),
+                lsp_types.Position(34, 9))
+        dinspect("result", result)
+
+        result = self.solc.client.definition(
+                lsp_types.TextDocumentIdentifier(self.get_test_file_uri(TEST_NAME)),
+                lsp_types.Position(34, 27))
+        dinspect("local var", result)
+
         # TODO: test on function parameter symbol
         # TODO: test on enum type symbol in expression
         # TODO: test on enum value symbol in expression
@@ -262,10 +278,6 @@ class SolcTests:
 
         # HACK: WIP
         #os.system("sleep 1") # quick workaround, just wait a bit
-        pass
-
-    def test_implementation(self):
-        # TODO
         pass
 
     def test_documentHighlight(self):
@@ -333,7 +345,7 @@ class SolidityLSPTestSuite:
         args = parser.parse_args()
 
         self.solc_path = args.solc_path
-        self.project_root_dir = os.path.realpath(args.project_root_dir) # '/home/trapni/work/solidity/'
+        self.project_root_dir = os.path.realpath(args.project_root_dir) + '/test/libsolidity/lsp'
 
 if __name__ == "__main__":
     suite = SolidityLSPTestSuite()

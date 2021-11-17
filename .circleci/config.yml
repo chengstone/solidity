@@ -193,6 +193,18 @@ defaults:
         - store_artifacts: *artifacts_test_results
         - gitter_notify_failure_unless_pr
 
+  - steps_test_lsp: &steps_test_lsp
+      steps:
+        - checkout
+        - attach_workspace:
+            at: build
+        - run:
+            name: LSP_test
+            command: ./test/libsolidity/lsp/solc-lsp-test.py
+        - store_test_results: *store_test_results
+        - store_artifacts: *artifacts_test_results
+        - gitter_notify_failure_unless_pr
+
   - steps_soltest_all: &steps_soltest_all
       steps:
         - checkout
@@ -804,6 +816,11 @@ jobs:
     <<: *base_ubuntu2004
     parallelism: 6
     <<: *steps_soltest_all
+
+  t_ubu_lsp: &t_ubu_lsp
+    <<: *base_ubuntu2004
+    parallelism: 6
+    <<: *steps_test_lsp
 
   t_archlinux_soltest: &t_archlinux_soltest
     <<: *base_archlinux

@@ -39,7 +39,6 @@
 #include <test/InteractiveTests.h>
 #include <test/Common.h>
 #include <test/EVMHost.h>
-#include <test/libsolidity/LSPTest.h>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -213,7 +212,6 @@ test_suite* init_unit_test_suite( int /*argc*/, char* /*argv*/[] )
 			ts.testCaseCreator
 		) > 0, std::string("no ") + ts.title + " tests found");
 	}
-	LSPTest::registerTestCases(master);
 
 	if (solidity::test::CommonOptions::get().disableSemanticTests)
 	{
